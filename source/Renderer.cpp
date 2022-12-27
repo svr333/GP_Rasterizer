@@ -44,16 +44,47 @@ void Renderer::Render()
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
 
+	auto v0 = Vector3{ 0, 0.5, 1 };
+	auto v1 = Vector3{ 0.5, -0.5, 1 };
+	auto v2 = Vector3{ -0.5, -0.5, 1 };
+
+	auto v0ss = Vector2{ static_cast<float>((v0.x + 1) / 2 * m_Width),static_cast<float>((1 - v0.y) / 2 * m_Height) };
+	auto v1ss = Vector2{ static_cast<float>((v1.x + 1) / 2 * m_Width),static_cast<float>((1 - v1.y) / 2 * m_Height) };
+	auto v2ss = Vector2{ static_cast<float>((v2.x + 1) / 2 * m_Width),static_cast<float>((1 - v2.y) / 2 * m_Height) };
+
 	//RENDER LOGIC
 	for (int px{}; px < m_Width; ++px)
 	{
 		for (int py{}; py < m_Height; ++py)
 		{
-			float gradient = px / static_cast<float>(m_Width);
-			gradient += py / static_cast<float>(m_Width);
-			gradient /= 2.0f;
+			Vector2 pixel{ static_cast<float>(px),static_cast<float>(py) };
+			Vector2 p0ToPixel = pixel - v0ss;
 
-			ColorRGB finalColor{ gradient, gradient, gradient };
+			Vector2 edge1 = { v1ss - v0ss };
+
+			if (Vector2::Cross(edge1, p0ToPixel) < 0)
+			{
+				continue;
+			}
+
+			Vector2 p1ToPixel = pixel - v1ss;
+			Vector2 edge2 = { v2ss - v1ss };
+
+			if (Vector2::Cross(edge2, p1ToPixel) < 0)
+			{
+				continue;
+			}
+
+			Vector2 p2ToPixel = pixel - v2ss;
+			Vector2 edge3 = { v0ss - v2ss };
+
+			if (Vector2::Cross(edge3, p2ToPixel) < 0)
+			{
+				continue;
+			}
+
+			// if pixel is in triangle
+			ColorRGB finalColor{ 1,1,1 };
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();
