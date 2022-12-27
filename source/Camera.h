@@ -18,9 +18,8 @@ namespace dae
 		{
 		}
 
-
 		Vector3 origin{};
-		float fovAngle{90.f};
+		float fovAngle{ 90.f };
 		float fov{ tanf((fovAngle * TO_RADIANS) / 2.f) };
 
 		Vector3 forward{Vector3::UnitZ};
@@ -33,6 +32,9 @@ namespace dae
 		Matrix invViewMatrix{};
 		Matrix viewMatrix{};
 
+		const float camVelocity = 5.0f;
+		const float angleVelocity = 0.09f;
+
 		void Initialize(float _fovAngle = 90.f, Vector3 _origin = {0.f,0.f,0.f})
 		{
 			fovAngle = _fovAngle;
@@ -43,9 +45,11 @@ namespace dae
 
 		void CalculateViewMatrix()
 		{
-			//TODO W1
-			//ONB => invViewMatrix
-			//Inverse(ONB) => ViewMatrix
+			right = Vector3::Cross(Vector3::UnitY, forward).Normalized();
+			up = Vector3::Cross(forward, right).Normalized();
+
+			invViewMatrix = Matrix{ right,up,forward,origin };
+			viewMatrix = invViewMatrix.Inverse();
 
 			//ViewMatrix => Matrix::CreateLookAtLH(...) [not implemented yet]
 			//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatlh
@@ -63,8 +67,39 @@ namespace dae
 		{
 			const float deltaTime = pTimer->GetElapsed();
 
-			//Camera Update Logic
-			//...
+			// Get current keyboard state
+			const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
+
+			// Get current mouse state
+			int mouseX{}, mouseY{};
+			const uint32_t mouseState = SDL_GetRelativeMouseState(&mouseX, &mouseY);
+
+			// WASD movement
+			if (pKeyboardState[SDL_SCANCODE_W])
+			{
+				origin += forward * camVelocity * deltaTime;
+			}
+			if (pKeyboardState[SDL_SCANCODE_S])
+			{
+				origin -= forward * camVelocity * deltaTime;
+			}
+			if (pKeyboardState[SDL_SCANCODE_A])
+			{
+				origin -= right * camVelocity * deltaTime;
+			}
+			if (pKeyboardState[SDL_SCANCODE_D])
+			{
+				origin += right * camVelocity * deltaTime;
+			}
+
+			// Rotate logic
+			if (mouseState & SDL_BUTTON_RMASK)
+			{
+				totalPitch -= mouseY * angleVelocity * deltaTime;
+				totalYaw += mouseX * angleVelocity * deltaTime;
+
+				forward = Matrix::CreateRotation(totalPitch, totalYaw, 0.0f).TransformVector(Vector3::UnitZ);
+			}
 
 			//Update Matrices
 			CalculateViewMatrix();

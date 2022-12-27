@@ -25,7 +25,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	//m_pDepthBufferPixels = new float[m_Width * m_Height];
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f,.0f,-10.f });
+	m_Camera.Initialize(60.f, { .0f, .0f, -10.f });
 }
 
 Renderer::~Renderer()
@@ -40,17 +40,17 @@ void Renderer::Update(Timer* pTimer)
 
 void Renderer::Render()
 {
-	//@START
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
 
-	auto v0 = Vector3{ 0, 0.5, 1 };
-	auto v1 = Vector3{ 0.5, -0.5, 1 };
-	auto v2 = Vector3{ -0.5, -0.5, 1 };
+	std::vector<Vertex> vertices_world {
+		{{ 0.f, 2.f, 0.f }},
+		{{ 1.f, 0.f, 0.f }},
+		{{ -1.f, 0.f, 0.f }},
+	};
 
-	auto v0ss = Vector2{ static_cast<float>((v0.x + 1) / 2 * m_Width),static_cast<float>((1 - v0.y) / 2 * m_Height) };
-	auto v1ss = Vector2{ static_cast<float>((v1.x + 1) / 2 * m_Width),static_cast<float>((1 - v1.y) / 2 * m_Height) };
-	auto v2ss = Vector2{ static_cast<float>((v2.x + 1) / 2 * m_Width),static_cast<float>((1 - v2.y) / 2 * m_Height) };
+	std::vector<Vertex> vertices;
+	VertexTransformationFunction(vertices_world, vertices);
 
 	//RENDER LOGIC
 	for (int px{}; px < m_Width; ++px)
@@ -58,28 +58,40 @@ void Renderer::Render()
 		for (int py{}; py < m_Height; ++py)
 		{
 			Vector2 pixel{ static_cast<float>(px),static_cast<float>(py) };
-			Vector2 p0ToPixel = pixel - v0ss;
+			Vector2 p0ToPixel = pixel - vertices[0].position.GetXY();
 
-			Vector2 edge1 = { v1ss - v0ss };
+			Vector2 edge1 = { vertices[1].position.GetXY() - vertices[0].position.GetXY() };
 
 			if (Vector2::Cross(edge1, p0ToPixel) < 0)
 			{
+				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+					static_cast<uint8_t>(0),
+					static_cast<uint8_t>(0),
+					static_cast<uint8_t>(0));
 				continue;
 			}
 
-			Vector2 p1ToPixel = pixel - v1ss;
-			Vector2 edge2 = { v2ss - v1ss };
+			Vector2 p1ToPixel = pixel - vertices[1].position.GetXY();
+			Vector2 edge2 = { vertices[2].position.GetXY() - vertices[1].position.GetXY() };
 
 			if (Vector2::Cross(edge2, p1ToPixel) < 0)
 			{
+				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+					static_cast<uint8_t>(0),
+					static_cast<uint8_t>(0),
+					static_cast<uint8_t>(0));
 				continue;
 			}
 
-			Vector2 p2ToPixel = pixel - v2ss;
-			Vector2 edge3 = { v0ss - v2ss };
+			Vector2 p2ToPixel = pixel - vertices[2].position.GetXY();
+			Vector2 edge3 = { vertices[0].position.GetXY() - vertices[2].position.GetXY() };
 
 			if (Vector2::Cross(edge3, p2ToPixel) < 0)
 			{
+				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+					static_cast<uint8_t>(0),
+					static_cast<uint8_t>(0),
+					static_cast<uint8_t>(0));
 				continue;
 			}
 
@@ -105,7 +117,20 @@ void Renderer::Render()
 
 void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
 {
-	//Todo > W1 Projection Stage
+	vertices_out = vertices_in;
+	auto aspectRatio = m_Width / m_Height;
+
+	for (auto& v : vertices_out)
+	{
+		v.position = m_Camera.viewMatrix.TransformPoint(v.position);
+		v.position.x /= (m_Camera.fov * aspectRatio);
+		v.position.y /= m_Camera.fov;
+		v.position.x /= v.position.z;
+		v.position.y /= v.position.z;
+
+		v.position.x = static_cast<float>((v.position.x + 1) / 2 * m_Width);
+		v.position.y = static_cast<float>((1 - v.position.y) / 2 * m_Height);
+	}
 }
 
 bool Renderer::SaveBufferToImage() const
