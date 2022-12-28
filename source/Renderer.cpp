@@ -44,9 +44,9 @@ void Renderer::Render()
 	SDL_LockSurface(m_pBackBuffer);
 
 	std::vector<Vertex> vertices_world {
-		{{ 0.f, 2.f, 0.f }},
-		{{ 1.f, 0.f, 0.f }},
-		{{ -1.f, 0.f, 0.f }},
+		{{ 0.f, 4.f, 2.f }, { 1.f, 0.f, 0.f }},
+		{{ 3.f, -2.f, 2.f }, { 0.f, 1.f, 0.f }},
+		{{ -3.f, -2.f, 2.f }, { 0.f, 0.f, 1.f }},
 	};
 
 	std::vector<Vertex> vertices;
@@ -61,8 +61,9 @@ void Renderer::Render()
 			Vector2 p0ToPixel = pixel - vertices[0].position.GetXY();
 
 			Vector2 edge1 = { vertices[1].position.GetXY() - vertices[0].position.GetXY() };
+			auto cross0 = Vector2::Cross(edge1, p0ToPixel);
 
-			if (Vector2::Cross(edge1, p0ToPixel) < 0)
+			if (cross0 < 0)
 			{
 				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
 					static_cast<uint8_t>(0),
@@ -73,8 +74,9 @@ void Renderer::Render()
 
 			Vector2 p1ToPixel = pixel - vertices[1].position.GetXY();
 			Vector2 edge2 = { vertices[2].position.GetXY() - vertices[1].position.GetXY() };
+			auto cross1 = Vector2::Cross(edge2, p1ToPixel);
 
-			if (Vector2::Cross(edge2, p1ToPixel) < 0)
+			if (cross1 < 0)
 			{
 				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
 					static_cast<uint8_t>(0),
@@ -85,8 +87,9 @@ void Renderer::Render()
 
 			Vector2 p2ToPixel = pixel - vertices[2].position.GetXY();
 			Vector2 edge3 = { vertices[0].position.GetXY() - vertices[2].position.GetXY() };
+			auto cross2 = Vector2::Cross(edge3, p2ToPixel);
 
-			if (Vector2::Cross(edge3, p2ToPixel) < 0)
+			if (cross2 < 0)
 			{
 				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
 					static_cast<uint8_t>(0),
@@ -95,8 +98,10 @@ void Renderer::Render()
 				continue;
 			}
 
-			// if pixel is in triangle
-			ColorRGB finalColor{ 1,1,1 };
+			auto total = cross0 + cross1 + cross2;
+
+			// interpolate color
+			ColorRGB finalColor = cross1 / total * vertices[0].color + cross2 / total * vertices[1].color + cross0 / total * vertices[2].color;
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();
