@@ -66,12 +66,16 @@ void Renderer::Render()
 
 	for (size_t i = 0; i < vertices.size(); i += 3)
 	{
-		//RENDER LOGIC
-		for (int px{}; px < m_Width; ++px)
+		auto top = std::min(std::max(std::max(vertices[i].position.y, vertices[i + 1].position.y), vertices[i + 2].position.y), static_cast<float>(m_Height));
+		auto bottom = std::max(std::min(std::min(vertices[i].position.y, vertices[i + 1].position.y), vertices[i + 2].position.y), 0.f);
+		auto left = std::max(std::min(std::min(vertices[i].position.x, vertices[i + 1].position.x), vertices[i + 2].position.x), 0.f);
+		auto right = std::min(std::max(std::max(vertices[i].position.x, vertices[i + 1].position.x), vertices[i + 2].position.x), static_cast<float>(m_Width));
+
+		for (int px{ static_cast<int>(left) }; px < static_cast<int>(right); ++px)
 		{
-			for (int py{}; py < m_Height; ++py)
+			for (int py{ static_cast<int>(bottom) }; py < static_cast<int>(top); ++py)
 			{
-				Vector2 pixel{ static_cast<float>(px),static_cast<float>(py) };
+				Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
 				Vector2 p0ToPixel = pixel - vertices[i].position.GetXY();
 
 				Vector2 edge1 = { vertices[i + 1].position.GetXY() - vertices[i].position.GetXY() };
