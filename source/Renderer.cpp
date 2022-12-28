@@ -22,7 +22,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pBackBuffer = SDL_CreateRGBSurface(0, m_Width, m_Height, 32, 0, 0, 0, 0);
 	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;
 
-	//m_pDepthBufferPixels = new float[m_Width * m_Height];
+	m_pDepthBufferPixels = new float[m_Width * m_Height];
 
 	//Initialize Camera
 	m_Camera.Initialize(60.f, { .0f, .0f, -10.f });
@@ -30,7 +30,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 Renderer::~Renderer()
 {
-	//delete[] m_pDepthBufferPixels;
+	delete[] m_pDepthBufferPixels;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -40,10 +40,22 @@ void Renderer::Update(Timer* pTimer)
 
 void Renderer::Render()
 {
-	//Lock BackBuffer
+	// Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
 
+	// Clear BackBuffer
+	// convert rgb to decimal
+	auto decimalColor = (100 << 16) + (100 << 8) + 100;
+	SDL_FillRect(m_pBackBuffer, NULL, decimalColor);
+
+	// Initialize Depth buffer
+	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max());
+
 	std::vector<Vertex> vertices_world {
+		{{ 0.f, 2.f, 0.f }, { 1.f, 0.f, 0.f }},
+		{{ 1.5f, -1.f, 0.f }, { 1.f, 0.f, 0.f }},
+		{{ -1.5f, -1.f, 0.f }, { 1.f, 0.f, 0.f }},
+
 		{{ 0.f, 4.f, 2.f }, { 1.f, 0.f, 0.f }},
 		{{ 3.f, -2.f, 2.f }, { 0.f, 1.f, 0.f }},
 		{{ -3.f, -2.f, 2.f }, { 0.f, 0.f, 1.f }},
@@ -52,64 +64,65 @@ void Renderer::Render()
 	std::vector<Vertex> vertices;
 	VertexTransformationFunction(vertices_world, vertices);
 
-	//RENDER LOGIC
-	for (int px{}; px < m_Width; ++px)
+	for (size_t i = 0; i < vertices.size(); i += 3)
 	{
-		for (int py{}; py < m_Height; ++py)
+		//RENDER LOGIC
+		for (int px{}; px < m_Width; ++px)
 		{
-			Vector2 pixel{ static_cast<float>(px),static_cast<float>(py) };
-			Vector2 p0ToPixel = pixel - vertices[0].position.GetXY();
-
-			Vector2 edge1 = { vertices[1].position.GetXY() - vertices[0].position.GetXY() };
-			auto cross0 = Vector2::Cross(edge1, p0ToPixel);
-
-			if (cross0 < 0)
+			for (int py{}; py < m_Height; ++py)
 			{
+				Vector2 pixel{ static_cast<float>(px),static_cast<float>(py) };
+				Vector2 p0ToPixel = pixel - vertices[i].position.GetXY();
+
+				Vector2 edge1 = { vertices[i + 1].position.GetXY() - vertices[i].position.GetXY() };
+				auto cross0 = Vector2::Cross(edge1, p0ToPixel);
+
+				if (cross0 < 0)
+				{
+					continue;
+				}
+
+				Vector2 p1ToPixel = pixel - vertices[i + 1].position.GetXY();
+				Vector2 edge2 = { vertices[i + 2].position.GetXY() - vertices[i + 1].position.GetXY() };
+				auto cross1 = Vector2::Cross(edge2, p1ToPixel);
+
+				if (cross1 < 0)
+				{
+					continue;
+				}
+
+				Vector2 p2ToPixel = pixel - vertices[i + 2].position.GetXY();
+				Vector2 edge3 = { vertices[i].position.GetXY() - vertices[i + 2].position.GetXY() };
+				auto cross2 = Vector2::Cross(edge3, p2ToPixel);
+
+				if (cross2 < 0)
+				{
+					continue;
+				}
+
+				// interpolate depth
+				auto total = cross0 + cross1 + cross2;
+				auto z = cross1 / total * vertices[i].position.z + cross2 / total * vertices[i + 1].position.z + cross0 / total * vertices[i + 2].position.z;
+
+				// depth test
+				if (z > m_pDepthBufferPixels[px + py * m_Width])
+				{
+					continue;
+				}
+
+				m_pDepthBufferPixels[px + py * m_Width] = z;
+
+				// interpolate color
+				ColorRGB finalColor = cross1 / total * vertices[i].color + cross2 / total * vertices[i + 1].color + cross0 / total * vertices[i + 2].color;
+
+				//Update Color in Buffer
+				finalColor.MaxToOne();
+
 				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-					static_cast<uint8_t>(0),
-					static_cast<uint8_t>(0),
-					static_cast<uint8_t>(0));
-				continue;
+					static_cast<uint8_t>(finalColor.r * 255),
+					static_cast<uint8_t>(finalColor.g * 255),
+					static_cast<uint8_t>(finalColor.b * 255));
 			}
-
-			Vector2 p1ToPixel = pixel - vertices[1].position.GetXY();
-			Vector2 edge2 = { vertices[2].position.GetXY() - vertices[1].position.GetXY() };
-			auto cross1 = Vector2::Cross(edge2, p1ToPixel);
-
-			if (cross1 < 0)
-			{
-				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-					static_cast<uint8_t>(0),
-					static_cast<uint8_t>(0),
-					static_cast<uint8_t>(0));
-				continue;
-			}
-
-			Vector2 p2ToPixel = pixel - vertices[2].position.GetXY();
-			Vector2 edge3 = { vertices[0].position.GetXY() - vertices[2].position.GetXY() };
-			auto cross2 = Vector2::Cross(edge3, p2ToPixel);
-
-			if (cross2 < 0)
-			{
-				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-					static_cast<uint8_t>(0),
-					static_cast<uint8_t>(0),
-					static_cast<uint8_t>(0));
-				continue;
-			}
-
-			auto total = cross0 + cross1 + cross2;
-
-			// interpolate color
-			ColorRGB finalColor = cross1 / total * vertices[0].color + cross2 / total * vertices[1].color + cross0 / total * vertices[2].color;
-
-			//Update Color in Buffer
-			finalColor.MaxToOne();
-
-			m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-				static_cast<uint8_t>(finalColor.r * 255),
-				static_cast<uint8_t>(finalColor.g * 255),
-				static_cast<uint8_t>(finalColor.b * 255));
 		}
 	}
 
