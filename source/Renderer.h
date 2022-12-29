@@ -34,6 +34,9 @@ namespace dae
 		bool SaveBufferToImage() const;
 
 	private:
+		void RenderTriangle(const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
+		void RenderMeshes(const std::vector<Mesh>& meshes) const;
+
 		SDL_Window* m_pWindow{};
 
 		SDL_Surface* m_pFrontBuffer{ nullptr };
@@ -47,7 +50,6 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
-		//Function that transforms the vertices from the mesh from World space to Screen space
-		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
+		void VertexTransformationFunction(std::vector<Mesh>& meshes) const;
 	};
 }
