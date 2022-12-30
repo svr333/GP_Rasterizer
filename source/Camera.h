@@ -50,9 +50,6 @@ namespace dae
 
 			invViewMatrix = Matrix{ right,up,forward,origin };
 			viewMatrix = invViewMatrix.Inverse();
-
-			//ViewMatrix => Matrix::CreateLookAtLH(...) [not implemented yet]
-			//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatlh
 		}
 
 		void CalculateProjectionMatrix()

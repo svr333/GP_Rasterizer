@@ -26,11 +26,14 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 	//Initialize Camera
 	m_Camera.Initialize(60.f, { .0f, .0f, -10.f });
+
+	m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
 }
 
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
+	delete m_pTexture;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -56,15 +59,15 @@ void Renderer::Render()
 		Mesh
 		{
 			{
-				Vertex{{-3, 3, -2}},
-				Vertex{{0, 3, -2}},
-				Vertex{{3, 3, -2}},
-				Vertex{{-3, 0, -2}},
-				Vertex{{0, 0, -2}},
-				Vertex{{3, 0, -2}},
-				Vertex{{-3, -3, -2}},
-				Vertex{{0, -3, -2}},
-				Vertex{{3, -3, -2}},
+				Vertex{{-3, 3, -2}, colors::White, {0, 0}},
+				Vertex{{0, 3, -2}, colors::White, {0.5, 0}},
+				Vertex{{3, 3, -2}, colors::White, {1, 0}},
+				Vertex{{-3, 0, -2}, colors::White, {0, 0.5}},
+				Vertex{{0, 0, -2}, colors::White, {0.5, 0.5}},
+				Vertex{{3, 0, -2}, colors::White, {1, 0.5}},
+				Vertex{{-3, -3, -2}, colors::White, {0, 1}},
+				Vertex{{0, -3, -2}, colors::White, {0.5, 1}},
+				Vertex{{3, -3, -2}, colors::White, {1, 1}},
 			},
 			{
 			3, 0, 4,    1, 5, 2,
@@ -99,10 +102,8 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 		for (auto& v : mesh.vertices_out)
 		{
 			v.position = m_Camera.viewMatrix.TransformPoint(v.position);
-			v.position.x /= (m_Camera.fov * aspectRatio);
-			v.position.y /= m_Camera.fov;
-			v.position.x /= v.position.z;
-			v.position.y /= v.position.z;
+			v.position.x /= v.position.z * (m_Camera.fov * aspectRatio);
+			v.position.y /= v.position.z * m_Camera.fov;
 
 			v.position.x = static_cast<float>((v.position.x + 1) / 2 * m_Width);
 			v.position.y = static_cast<float>((1 - v.position.y) / 2 * m_Height);
@@ -156,7 +157,7 @@ void dae::Renderer::RenderTriangle(const Vertex& v0, const Vertex& v1, const Ver
 			}
 
 			// interpolate depth
-			auto total = cross0 + cross1 + cross2;
+			auto total = std::max(cross0 + cross1 + cross2, FLT_EPSILON);
 			auto z = cross1 / total * v0.position.z + cross2 / total * v1.position.z + cross0 / total * v2.position.z;
 
 			// depth test
@@ -168,7 +169,8 @@ void dae::Renderer::RenderTriangle(const Vertex& v0, const Vertex& v1, const Ver
 			m_pDepthBufferPixels[px + py * m_Width] = z;
 
 			// interpolate color
-			ColorRGB finalColor = cross1 / total * v0.color + cross2 / total * v1.color + cross0 / total * v2.color;
+			//ColorRGB finalColor = cross1 / total * v0.color + cross2 / total * v1.color + cross0 / total * v2.color;
+			ColorRGB finalColor = m_pTexture->Sample(cross1 / total * v0.uv + cross2 / total * v1.uv + cross0 / total * v2.uv);
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();

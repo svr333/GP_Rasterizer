@@ -34,9 +34,6 @@ namespace dae
 		bool SaveBufferToImage() const;
 
 	private:
-		void RenderTriangle(const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
-		void RenderMeshes(const std::vector<Mesh>& meshes) const;
-
 		SDL_Window* m_pWindow{};
 
 		SDL_Surface* m_pFrontBuffer{ nullptr };
@@ -50,6 +47,11 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
+		Texture* m_pTexture{ nullptr };
+
 		void VertexTransformationFunction(std::vector<Mesh>& meshes) const;
+
+		void RenderTriangle(const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
+		void RenderMeshes(const std::vector<Mesh>& meshes) const;
 	};
 }
