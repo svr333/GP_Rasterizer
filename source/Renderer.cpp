@@ -93,7 +93,7 @@ void Renderer::Render()
 
 void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 {
-	auto aspectRatio = m_Width / m_Height;
+	auto aspectRatio = static_cast<float>(m_Width) / m_Height;
 
 	for (auto& mesh : meshes)
 	{
