@@ -118,6 +118,17 @@ bool Renderer::SaveBufferToImage() const
 
 void dae::Renderer::RenderTriangle(const Vertex& v0, const Vertex& v1, const Vertex& v2) const
 {
+	Vector2 edge0 = { v2.position.GetXY() - v1.position.GetXY() };
+	Vector2 edge1 = { v0.position.GetXY() - v2.position.GetXY() };
+	Vector2 edge2 = { v1.position.GetXY() - v0.position.GetXY() };
+
+	float area = Vector2::Cross(edge0, edge1);
+
+	if (area < 1.0f)
+	{
+		return;
+	}
+
 	auto top = std::min(std::max(std::max(v0.position.y, v1.position.y), v2.position.y), static_cast<float>(m_Height));
 	auto bottom = std::max(std::min(std::min(v0.position.y, v1.position.y), v2.position.y), 0.f);
 	auto left = std::max(std::min(std::min(v0.position.x, v1.position.x), v2.position.x), 0.f);
@@ -128,49 +139,48 @@ void dae::Renderer::RenderTriangle(const Vertex& v0, const Vertex& v1, const Ver
 		for (int py{ static_cast<int>(bottom) }; py < static_cast<int>(top); ++py)
 		{
 			Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
+
 			Vector2 p0ToPixel = pixel - v0.position.GetXY();
+			auto w2 = Vector2::Cross(edge2, p0ToPixel) / area;
 
-			Vector2 edge1 = { v1.position.GetXY() - v0.position.GetXY() };
-			auto cross0 = Vector2::Cross(edge1, p0ToPixel);
-
-			if (cross0 < 0)
+			if (w2 < 0.0f)
 			{
 				continue;
 			}
 
 			Vector2 p1ToPixel = pixel - v1.position.GetXY();
-			Vector2 edge2 = { v2.position.GetXY() - v1.position.GetXY() };
-			auto cross1 = Vector2::Cross(edge2, p1ToPixel);
+			auto w0 = Vector2::Cross(edge0, p1ToPixel) / area;
 
-			if (cross1 < 0)
+			if (w0 < 0.0f)
 			{
 				continue;
 			}
 
 			Vector2 p2ToPixel = pixel - v2.position.GetXY();
-			Vector2 edge3 = { v0.position.GetXY() - v2.position.GetXY() };
-			auto cross2 = Vector2::Cross(edge3, p2ToPixel);
+			auto w1 = Vector2::Cross(edge1, p2ToPixel) / area;
 
-			if (cross2 < 0)
+			if (w1 < 0.0f)
 			{
 				continue;
 			}
 
-			// interpolate depth
-			auto total = std::max(cross0 + cross1 + cross2, FLT_EPSILON);
-			auto z = cross1 / total * v0.position.z + cross2 / total * v1.position.z + cross0 / total * v2.position.z;
+			w0 /= v0.position.z;
+			w1 /= v1.position.z;
+			w2 /= v2.position.z;
+
+			auto depth = 1.0f / std::max((w0 + w1 + w2), FLT_EPSILON);
 
 			// depth test
-			if (z > m_pDepthBufferPixels[px + py * m_Width])
+			if (depth > m_pDepthBufferPixels[px + py * m_Width])
 			{
 				continue;
 			}
 
-			m_pDepthBufferPixels[px + py * m_Width] = z;
+			m_pDepthBufferPixels[px + py * m_Width] = depth;
 
 			// interpolate color
-			//ColorRGB finalColor = cross1 / total * v0.color + cross2 / total * v1.color + cross0 / total * v2.color;
-			ColorRGB finalColor = m_pTexture->Sample(cross1 / total * v0.uv + cross2 / total * v1.uv + cross0 / total * v2.uv);
+			//ColorRGB finalColor = (w0 * v0.color + w1 * v1.color + w2 * v2.color) * depth;
+			ColorRGB finalColor = m_pTexture->Sample((w0 * v0.uv + w1 * v1.uv + w2 * v2.uv) * depth);
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();
