@@ -49,7 +49,8 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
-		Texture* m_pTexture{ nullptr };
+		Mesh m_Mesh{};
+		Texture* m_pTexture = nullptr;
 
 		bool m_DepthBufferVisualization = false;
 

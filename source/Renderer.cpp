@@ -26,9 +26,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 	//Initialize Camera
 	auto aspectRatio = static_cast<float>(m_Width) / m_Height;
-	m_Camera.Initialize(aspectRatio, 60.f, { .0f, .0f, -10.f });
+	m_Camera.Initialize(aspectRatio, 60.f, { .0f, 6.0f, -35.f });
 
-	m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
+	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
+	Utils::ParseOBJ("Resources/tuktuk.obj", m_Mesh.vertices, m_Mesh.indices);
 }
 
 Renderer::~Renderer()
@@ -55,32 +56,7 @@ void Renderer::Render()
 	// Initialize Depth buffer
 	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max());
 
-	std::vector<Mesh> meshes_world
-	{
-		Mesh
-		{
-			{
-				Vertex{{-3, 3, -2}, colors::White, {0, 0}},
-				Vertex{{0, 3, -2}, colors::White, {0.5, 0}},
-				Vertex{{3, 3, -2}, colors::White, {1, 0}},
-				Vertex{{-3, 0, -2}, colors::White, {0, 0.5}},
-				Vertex{{0, 0, -2}, colors::White, {0.5, 0.5}},
-				Vertex{{3, 0, -2}, colors::White, {1, 0.5}},
-				Vertex{{-3, -3, -2}, colors::White, {0, 1}},
-				Vertex{{0, -3, -2}, colors::White, {0.5, 1}},
-				Vertex{{3, -3, -2}, colors::White, {1, 1}},
-			},
-			{
-			3, 0, 4,    1, 5, 2,
-			2, 6,
-			6, 3, 7,    4, 8, 5
-				//3, 0, 1,   1, 4, 3,   4, 1, 2,
-				//2, 5, 4,   6, 3, 4,   4, 7, 6,
-				//7, 4, 5,   5, 8, 7
-			},
-			PrimitiveTopology::TriangleStrip
-		}
-	};
+	std::vector<Mesh> meshes_world{ m_Mesh };
 
 	VertexTransformationFunction(meshes_world);
 	RenderMeshes(meshes_world);
@@ -97,6 +73,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 	for (auto& mesh : meshes)
 	{
 		Matrix matrix{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
+		mesh.vertices_out.clear();
 		mesh.vertices_out.reserve(mesh.vertices.size());
 
 		for (size_t i{}; i < mesh.vertices.size(); ++i)
@@ -114,6 +91,8 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 
 			v.color = mesh.vertices[i].color;
 			v.uv = mesh.vertices[i].uv;
+			v.normal = mesh.vertices[i].normal;
+			v.tangent = mesh.vertices[i].tangent;
 
 			mesh.vertices_out.emplace_back(v);
 		}
@@ -132,6 +111,15 @@ void Renderer::ToggleDepthBufferVisualization()
 
 void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const Vertex_Out& v2) const
 {
+	// Frustum culling x & y
+	if (v0.position.x < 0 || v1.position.x < 0 || v2.position.x < 0 ||
+		v0.position.x > m_Width || v1.position.x > m_Width || v2.position.x > m_Width ||
+		v0.position.y < 0 || v1.position.y < 0 || v2.position.y < 0 ||
+		v0.position.y > m_Height || v1.position.y > m_Height || v2.position.y > m_Height)
+	{
+		return;
+	}
+
 	Vector2 edge0 = { v2.position.GetXY() - v1.position.GetXY() };
 	Vector2 edge1 = { v0.position.GetXY() - v2.position.GetXY() };
 	Vector2 edge2 = { v1.position.GetXY() - v0.position.GetXY() };
@@ -143,10 +131,10 @@ void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const 
 		return;
 	}
 
-	auto top = std::min(std::max(std::max(v0.position.y, v1.position.y), v2.position.y), static_cast<float>(m_Height));
-	auto bottom = std::max(std::min(std::min(v0.position.y, v1.position.y), v2.position.y), 0.f);
-	auto left = std::max(std::min(std::min(v0.position.x, v1.position.x), v2.position.x), 0.f);
-	auto right = std::min(std::max(std::max(v0.position.x, v1.position.x), v2.position.x), static_cast<float>(m_Width));
+	auto top = std::max(std::max(v0.position.y, v1.position.y), v2.position.y);
+	auto bottom = std::min(std::min(v0.position.y, v1.position.y), v2.position.y);
+	auto left = std::min(std::min(v0.position.x, v1.position.x), v2.position.x);
+	auto right = std::max(std::max(v0.position.x, v1.position.x), v2.position.x);
 
 	for (int px{ static_cast<int>(left) }; px < static_cast<int>(right); ++px)
 	{
@@ -181,7 +169,7 @@ void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const 
 			// Deoth Buffer
 			float depthBuffer = 1.f / (w0 / v0.position.z + w1 / v1.position.z + w2 / v2.position.z);
 
-			// depth test
+			// frustum culling z + depth test
 			if (depthBuffer < 0 || depthBuffer > 1 ||
 				depthBuffer > m_pDepthBufferPixels[px + py * m_Width])
 			{
