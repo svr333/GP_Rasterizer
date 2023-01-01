@@ -25,7 +25,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pDepthBufferPixels = new float[m_Width * m_Height];
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f, .0f, -10.f });
+	auto aspectRatio = static_cast<float>(m_Width) / m_Height;
+	m_Camera.Initialize(aspectRatio, 60.f, { .0f, .0f, -10.f });
 
 	m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
 }
@@ -93,20 +94,28 @@ void Renderer::Render()
 
 void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 {
-	auto aspectRatio = static_cast<float>(m_Width) / m_Height;
-
 	for (auto& mesh : meshes)
 	{
-		mesh.vertices_out = mesh.vertices;
+		Matrix matrix{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
+		mesh.vertices_out.reserve(mesh.vertices.size());
 
-		for (auto& v : mesh.vertices_out)
+		for (size_t i{}; i < mesh.vertices.size(); ++i)
 		{
-			v.position = m_Camera.viewMatrix.TransformPoint(v.position);
-			v.position.x /= v.position.z * (m_Camera.fov * aspectRatio);
-			v.position.y /= v.position.z * m_Camera.fov;
+			Vertex_Out v{};
 
-			v.position.x = static_cast<float>((v.position.x + 1) / 2 * m_Width);
-			v.position.y = static_cast<float>((1 - v.position.y) / 2 * m_Height);
+			v.position = matrix.TransformPoint({ mesh.vertices[i].position, 1.f });
+
+			v.position.x /= v.position.w;
+			v.position.y /= v.position.w;
+			v.position.z /= v.position.w;
+
+			v.position.x = ((1.f + v.position.x) / 2.f) * m_Width;
+			v.position.y = ((1.f - v.position.y) / 2.f) * m_Height;
+
+			v.color = mesh.vertices[i].color;
+			v.uv = mesh.vertices[i].uv;
+
+			mesh.vertices_out.emplace_back(v);
 		}
 	}
 }
@@ -116,7 +125,12 @@ bool Renderer::SaveBufferToImage() const
 	return SDL_SaveBMP(m_pBackBuffer, "Rasterizer_ColorBuffer.bmp");
 }
 
-void dae::Renderer::RenderTriangle(const Vertex& v0, const Vertex& v1, const Vertex& v2) const
+void Renderer::ToggleDepthBufferVisualization()
+{
+	m_DepthBufferVisualization = !m_DepthBufferVisualization;
+}
+
+void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const Vertex_Out& v2) const
 {
 	Vector2 edge0 = { v2.position.GetXY() - v1.position.GetXY() };
 	Vector2 edge1 = { v0.position.GetXY() - v2.position.GetXY() };
@@ -164,25 +178,41 @@ void dae::Renderer::RenderTriangle(const Vertex& v0, const Vertex& v1, const Ver
 				continue;
 			}
 
-			w0 /= v0.position.z;
-			w1 /= v1.position.z;
-			w2 /= v2.position.z;
-
-			auto depth = 1.0f / std::max((w0 + w1 + w2), FLT_EPSILON);
+			// Deoth Buffer
+			float depthBuffer = 1.f / (w0 / v0.position.z + w1 / v1.position.z + w2 / v2.position.z);
 
 			// depth test
-			if (depth > m_pDepthBufferPixels[px + py * m_Width])
+			if (depthBuffer < 0 || depthBuffer > 1 ||
+				depthBuffer > m_pDepthBufferPixels[px + py * m_Width])
 			{
 				continue;
 			}
 
-			m_pDepthBufferPixels[px + py * m_Width] = depth;
+			m_pDepthBufferPixels[px + py * m_Width] = depthBuffer;
 
-			// interpolate color
-			//ColorRGB finalColor = (w0 * v0.color + w1 * v1.color + w2 * v2.color) * depth;
-			ColorRGB finalColor = m_pTexture->Sample((w0 * v0.uv + w1 * v1.uv + w2 * v2.uv) * depth);
+			// actual depth
+			w0 /= v0.position.w;
+			w1 /= v1.position.w;
+			w2 /= v2.position.w;
 
-			//Update Color in Buffer
+			auto depth = 1.0f / (w0 + w1 + w2);
+
+			ColorRGB finalColor{};
+
+			if (m_DepthBufferVisualization)
+			{
+				// Remap so it isnt too bright 
+				depthBuffer = (depthBuffer - 0.985f) / (1.0f - 0.985f);
+
+				depthBuffer = Clamp(depthBuffer, 0.f, 1.f);
+				finalColor = { depthBuffer, depthBuffer, depthBuffer };
+			}
+			else
+			{
+				//ColorRGB finalColor = (w0 * v0.color + w1 * v1.color + w2 * v2.color) * depth;
+				finalColor = m_pTexture->Sample((w0 * v0.uv + w1 * v1.uv + w2 * v2.uv) * depth);
+			}
+
 			finalColor.MaxToOne();
 
 			m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
@@ -193,7 +223,7 @@ void dae::Renderer::RenderTriangle(const Vertex& v0, const Vertex& v1, const Ver
 	}
 }
 
-void dae::Renderer::RenderMeshes(const std::vector<Mesh>& meshes) const
+void Renderer::RenderMeshes(const std::vector<Mesh>& meshes) const
 {
 	for (size_t i = 0; i < meshes.size(); i++)
 	{

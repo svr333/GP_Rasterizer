@@ -14,6 +14,7 @@ namespace dae
 	class Texture;
 	struct Mesh;
 	struct Vertex;
+	struct Vertex_Out;
 	class Timer;
 	class Scene;
 
@@ -32,6 +33,7 @@ namespace dae
 		void Render();
 
 		bool SaveBufferToImage() const;
+		void ToggleDepthBufferVisualization();
 
 	private:
 		SDL_Window* m_pWindow{};
@@ -49,9 +51,11 @@ namespace dae
 
 		Texture* m_pTexture{ nullptr };
 
+		bool m_DepthBufferVisualization = false;
+
 		void VertexTransformationFunction(std::vector<Mesh>& meshes) const;
 
-		void RenderTriangle(const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
+		void RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const Vertex_Out& v2) const;
 		void RenderMeshes(const std::vector<Mesh>& meshes) const;
 	};
 }
