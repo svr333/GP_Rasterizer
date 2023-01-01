@@ -41,6 +41,13 @@ Renderer::~Renderer()
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
+
+	if (m_RotateMesh)
+	{
+		m_MeshRotation += pTimer->GetElapsed();
+
+		m_Mesh.worldMatrix = Matrix::CreateRotationY(m_MeshRotation);
+	}
 }
 
 void Renderer::Render()
@@ -107,6 +114,11 @@ bool Renderer::SaveBufferToImage() const
 void Renderer::ToggleDepthBufferVisualization()
 {
 	m_DepthBufferVisualization = !m_DepthBufferVisualization;
+}
+
+void Renderer::ToggleMeshRotation()
+{
+	m_RotateMesh = !m_RotateMesh;
 }
 
 void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const Vertex_Out& v2) const

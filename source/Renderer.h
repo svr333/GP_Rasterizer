@@ -34,6 +34,7 @@ namespace dae
 
 		bool SaveBufferToImage() const;
 		void ToggleDepthBufferVisualization();
+		void ToggleMeshRotation();
 
 	private:
 		SDL_Window* m_pWindow{};
@@ -45,6 +46,7 @@ namespace dae
 		float* m_pDepthBufferPixels{};
 
 		Camera m_Camera{};
+		float m_MeshRotation = 0.0f;
 
 		int m_Width{};
 		int m_Height{};
@@ -53,6 +55,7 @@ namespace dae
 		Texture* m_pTexture = nullptr;
 
 		bool m_DepthBufferVisualization = false;
+		bool m_RotateMesh = false;
 
 		void VertexTransformationFunction(std::vector<Mesh>& meshes) const;
 
