@@ -61,5 +61,7 @@ namespace dae
 
 		void RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const Vertex_Out& v2) const;
 		void RenderMeshes(const std::vector<Mesh>& meshes) const;
+
+		ColorRGB PixelShading(const Vertex_Out& v) const;
 	};
 }

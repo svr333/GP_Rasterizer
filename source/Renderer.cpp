@@ -26,10 +26,12 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 	//Initialize Camera
 	auto aspectRatio = static_cast<float>(m_Width) / m_Height;
-	m_Camera.Initialize(aspectRatio, 60.f, { .0f, 6.0f, -35.f });
+	m_Camera.Initialize(aspectRatio, 45.f, { .0f, 0.0f, 0.0f });
 
-	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
-	Utils::ParseOBJ("Resources/tuktuk.obj", m_Mesh.vertices, m_Mesh.indices);
+	m_pTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	Utils::ParseOBJ("Resources/vehicle.obj", m_Mesh.vertices, m_Mesh.indices);
+	m_Mesh.primitiveTopology = PrimitiveTopology::TriangleList;
+	m_Mesh.worldMatrix = Matrix::CreateTranslation(0.f, 0.f, 50.f);
 }
 
 Renderer::~Renderer()
@@ -46,7 +48,7 @@ void Renderer::Update(Timer* pTimer)
 	{
 		m_MeshRotation += pTimer->GetElapsed();
 
-		m_Mesh.worldMatrix = Matrix::CreateRotationY(m_MeshRotation);
+		m_Mesh.worldMatrix = Matrix::CreateRotationY(m_MeshRotation) * Matrix::CreateTranslation(0.f, 0.f, 50.f);
 	}
 }
 
@@ -98,7 +100,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 
 			v.color = mesh.vertices[i].color;
 			v.uv = mesh.vertices[i].uv;
-			v.normal = mesh.vertices[i].normal;
+			v.normal = mesh.worldMatrix.TransformVector(mesh.vertices[i].normal);
 			v.tangent = mesh.vertices[i].tangent;
 
 			mesh.vertices_out.emplace_back(v);
@@ -209,8 +211,14 @@ void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const 
 			}
 			else
 			{
-				//ColorRGB finalColor = (w0 * v0.color + w1 * v1.color + w2 * v2.color) * depth;
-				finalColor = m_pTexture->Sample((w0 * v0.uv + w1 * v1.uv + w2 * v2.uv) * depth);
+				Vertex_Out shadingVertex{};
+				shadingVertex.position.x = (float)px;
+				shadingVertex.position.y = (float)py;
+				shadingVertex.color = (w0 * v0.color + w1 * v1.color + w2 * v2.color) * depth;
+				shadingVertex.uv = (w0 * v0.uv + w1 * v1.uv + w2 * v2.uv) * depth;
+				shadingVertex.normal = ((w0 * v0.normal + w1 * v1.normal + w2 * v2.normal) * depth).Normalized();
+
+				finalColor = PixelShading(shadingVertex);
 			}
 
 			finalColor.MaxToOne();
@@ -252,4 +260,21 @@ void Renderer::RenderMeshes(const std::vector<Mesh>& meshes) const
 			}
 		}
 	}
+}
+
+ColorRGB Renderer::PixelShading(const Vertex_Out& v) const
+{
+	Vector3 lightDirection = { .577f, -.577f, .577f };
+	float dot = v.normal * -lightDirection;
+
+	if (dot < 0.f)
+	{
+		return {};
+	}
+
+	// Lambert: color * intensity / PI
+	ColorRGB finalColor = m_pTexture->Sample(v.uv) * dot * 7 / M_PI;
+	finalColor.MaxToOne();
+
+	return finalColor;
 }

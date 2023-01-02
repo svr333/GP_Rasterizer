@@ -43,6 +43,7 @@ namespace dae
 		Vector3& operator-=(const Vector3& v);
 		Vector3& operator/=(float scale);
 		Vector3& operator*=(float scale);
+		float operator*(const Vector3& v) const;
 		float& operator[](int index);
 		float operator[](int index) const;
 
