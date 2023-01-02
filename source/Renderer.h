@@ -35,6 +35,8 @@ namespace dae
 		bool SaveBufferToImage() const;
 		void ToggleDepthBufferVisualization();
 		void ToggleMeshRotation();
+		void ToggleNormalMap();
+		void CycleLightingMode();
 
 	private:
 		SDL_Window* m_pWindow{};
@@ -53,9 +55,23 @@ namespace dae
 
 		Mesh m_Mesh{};
 		Texture* m_pTexture = nullptr;
+		Texture* m_pNormal = nullptr;
+		Texture* m_pGloss = nullptr;
+		Texture* m_pSpecular = nullptr;
 
+		enum class LightingMode
+		{
+			ObservedArea,
+			Diffuse,
+			Specular,
+			Combined,
+			End
+		};
+
+		LightingMode m_LightingMode{ LightingMode::Combined };
 		bool m_DepthBufferVisualization = false;
 		bool m_RotateMesh = false;
+		bool m_UseNormalMap = true;
 
 		void VertexTransformationFunction(std::vector<Mesh>& meshes) const;
 
@@ -63,5 +79,6 @@ namespace dae
 		void RenderMeshes(const std::vector<Mesh>& meshes) const;
 
 		ColorRGB PixelShading(const Vertex_Out& v) const;
+		ColorRGB Phong(ColorRGB specular, float gloss, Vector3 lightDir, Vector3 viewDir, Vector3 normal) const;
 	};
 }

@@ -8,6 +8,7 @@
 #include "Matrix.h"
 #include "Texture.h"
 #include "Utils.h"
+#include <iostream>
 
 using namespace dae;
 
@@ -28,7 +29,13 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	auto aspectRatio = static_cast<float>(m_Width) / m_Height;
 	m_Camera.Initialize(aspectRatio, 45.f, { .0f, 0.0f, 0.0f });
 
+	// Load textures
 	m_pTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pNormal = Texture::LoadFromFile("Resources/vehicle_normal.png");
+	m_pGloss = Texture::LoadFromFile("Resources/vehicle_gloss.png");
+	m_pSpecular = Texture::LoadFromFile("Resources/vehicle_specular.png");
+
+	// Initialize mesh
 	Utils::ParseOBJ("Resources/vehicle.obj", m_Mesh.vertices, m_Mesh.indices);
 	m_Mesh.primitiveTopology = PrimitiveTopology::TriangleList;
 	m_Mesh.worldMatrix = Matrix::CreateTranslation(0.f, 0.f, 50.f);
@@ -38,6 +45,9 @@ Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
 	delete m_pTexture;
+	delete m_pNormal;
+	delete m_pGloss;
+	delete m_pSpecular;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -101,7 +111,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes) const
 			v.color = mesh.vertices[i].color;
 			v.uv = mesh.vertices[i].uv;
 			v.normal = mesh.worldMatrix.TransformVector(mesh.vertices[i].normal);
-			v.tangent = mesh.vertices[i].tangent;
+			v.tangent = mesh.worldMatrix.TransformVector(mesh.vertices[i].tangent);
 
 			mesh.vertices_out.emplace_back(v);
 		}
@@ -116,12 +126,29 @@ bool Renderer::SaveBufferToImage() const
 void Renderer::ToggleDepthBufferVisualization()
 {
 	m_DepthBufferVisualization = !m_DepthBufferVisualization;
+	std::cout << "Toggled Depth Visualization To: " << m_DepthBufferVisualization << "\n";
 }
 
 void Renderer::ToggleMeshRotation()
 {
 	m_RotateMesh = !m_RotateMesh;
+	std::cout << "Toggled Mesh Rotation To: " << m_RotateMesh << "\n";
 }
+
+void Renderer::ToggleNormalMap()
+{
+	m_UseNormalMap = !m_UseNormalMap;
+	std::cout << "Toggled Normal Map To: " << m_UseNormalMap << "\n";
+}
+
+void Renderer::CycleLightingMode()
+{
+	m_LightingMode = LightingMode(((int)m_LightingMode + 1) % (int)LightingMode::End);
+
+	std::cout << "Toggled Lighting Mode To: " << (int)m_LightingMode << "\n";
+}
+
+// Private functions
 
 void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const Vertex_Out& v2) const
 {
@@ -217,6 +244,7 @@ void Renderer::RenderTriangle(const Vertex_Out& v0, const Vertex_Out& v1, const 
 				shadingVertex.color = (w0 * v0.color + w1 * v1.color + w2 * v2.color) * depth;
 				shadingVertex.uv = (w0 * v0.uv + w1 * v1.uv + w2 * v2.uv) * depth;
 				shadingVertex.normal = ((w0 * v0.normal + w1 * v1.normal + w2 * v2.normal) * depth).Normalized();
+				shadingVertex.tangent = ((w0 * v0.tangent + w1 * v1.tangent + w2 * v2.tangent) * depth).Normalized();
 
 				finalColor = PixelShading(shadingVertex);
 			}
@@ -265,16 +293,70 @@ void Renderer::RenderMeshes(const std::vector<Mesh>& meshes) const
 ColorRGB Renderer::PixelShading(const Vertex_Out& v) const
 {
 	Vector3 lightDirection = { .577f, -.577f, .577f };
-	float dot = v.normal * -lightDirection;
+	Vector3 normal{ v.normal };
+
+	// Create viewDirection
+	float x = (2 * (v.position.x + 0.5f / float(m_Width)) - 1) * m_Camera.aspectRatio * m_Camera.fov;
+	float y = (1 - (2 * (v.position.y + 0.5f / float(m_Height)))) * m_Camera.fov;
+
+	Vector3 viewDirection = (x * m_Camera.right + y * m_Camera.up + m_Camera.forward).Normalized();
+
+	if (m_UseNormalMap)
+	{
+		// Create tangent space transformation matrix
+		Vector3 binormal = Vector3::Cross(v.normal, v.tangent);
+		Matrix tangentSpaceAxis{ v.tangent, binormal, v.normal, Vector3::Zero };
+
+		// sample and remap color to [-1, 1]
+		ColorRGB sampledColor = m_pNormal->Sample(v.uv);
+		sampledColor = (2.f * sampledColor) - ColorRGB{ 1.f, 1.f, 1.f };
+
+		normal = tangentSpaceAxis.TransformVector(sampledColor.r, sampledColor.g, sampledColor.b);
+	}
+
+	float dot = normal * -lightDirection;
 
 	if (dot < 0.f)
 	{
 		return {};
 	}
 
-	// Lambert: color * intensity / PI
-	ColorRGB finalColor = m_pTexture->Sample(v.uv) * dot * 7 / M_PI;
-	finalColor.MaxToOne();
+	ColorRGB finalColor{};
+	auto lightIntensity = 7.0f;
+	auto shine = 25.0f;
 
+	float dot2 = -1;
+
+	switch (m_LightingMode)
+	{
+		case Renderer::LightingMode::ObservedArea:
+			finalColor = { dot, dot, dot };
+			break;
+		case Renderer::LightingMode::Diffuse:
+			finalColor = m_pTexture->Sample(v.uv) * dot * lightIntensity / M_PI;
+			break;
+		case Renderer::LightingMode::Specular:
+			finalColor = Phong(m_pSpecular->Sample(v.uv), shine * m_pGloss->Sample(v.uv).r, -lightDirection, viewDirection, normal) * dot;
+			break;
+		case Renderer::LightingMode::Combined:
+		default:
+			finalColor = m_pTexture->Sample(v.uv) * dot * lightIntensity / M_PI;
+			finalColor += Phong(m_pSpecular->Sample(v.uv), shine * m_pGloss->Sample(v.uv).r, -lightDirection, viewDirection, normal) * dot;
+			break;
+	}
+
+	finalColor.MaxToOne();
 	return finalColor;
+}
+
+ColorRGB Renderer::Phong(ColorRGB specular, float gloss, Vector3 lightDir, Vector3 viewDir, Vector3 normal) const
+{
+	auto dot = (lightDir - (normal * (2.f * (normal * lightDir)))) * viewDir;
+
+	if (dot < 0.f)
+	{
+		return {};
+	}
+
+	return specular * powf(dot, gloss);
 }

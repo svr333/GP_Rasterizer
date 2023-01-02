@@ -67,6 +67,10 @@ int main(int argc, char* args[])
 					pRenderer->ToggleDepthBufferVisualization();
 				else if (e.key.keysym.scancode == SDL_SCANCODE_F5)
 					pRenderer->ToggleMeshRotation();
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F6)
+					pRenderer->ToggleNormalMap();
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F7)
+					pRenderer->CycleLightingMode();
 				break;
 			}
 		}
